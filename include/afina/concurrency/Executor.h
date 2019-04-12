@@ -15,7 +15,12 @@ namespace Concurrency {
 /**
  * # Thread pool
  */
+    class Executor;
+
+    void perform(Executor *executor);
+
 class Executor {
+public:
     enum class State {
         // Threadpool is fully operational, tasks could be added and get executed
         kRun,
@@ -28,9 +33,18 @@ class Executor {
         kStopped
     };
 
-    Executor(std::string name, int size);
+    Executor(unsigned int low_watermark, unsigned int high_watermark, unsigned int max_queue_size, size_t idle_time);
     ~Executor();
 
+
+    // No copy/move/assign allowed
+    Executor(const Executor &) = delete;
+
+    Executor(Executor &&) = delete;
+
+    Executor &operator=(const Executor &) = delete;
+
+    Executor &operator=(Executor &&) = delete;
     /**
      * Signal thread pool to stop, it will stop accepting new jobs and close threads just after each become
      * free. All enqueued jobs will be complete.
@@ -51,23 +65,34 @@ class Executor {
         auto exec = std::bind(std::forward<F>(func), std::forward<Types>(args)...);
 
         std::unique_lock<std::mutex> lock(this->mutex);
+        lock.lock();
         if (state != State::kRun) {
             return false;
         }
 
         // Enqueue new task
+        if (tasks.size() >= _max_queue_size) {
+            return false;
+        }
+
         tasks.push_back(exec);
+
+
+        if (_n_free_workers == 0 && _n_existing_workers == _high_watermark) {
+            return false;
+        }
+
+        if (_n_free_workers == 0) {
+            _n_existing_workers++;
+            std::thread tmp(perform, this);
+            tmp.detach();
+        }
+
         empty_condition.notify_one();
         return true;
     }
 
 private:
-    // No copy/move/assign allowed
-    Executor(const Executor &);            // = delete;
-    Executor(Executor &&);                 // = delete;
-    Executor &operator=(const Executor &); // = delete;
-    Executor &operator=(Executor &&);      // = delete;
-
     /**
      * Main function that all pool threads are running. It polls internal task queue and execute tasks
      */
@@ -97,6 +122,15 @@ private:
      * Flag to stop bg threads
      */
     State state;
+
+    unsigned int _low_watermark = 0;
+    unsigned int _high_watermark = 0;
+    unsigned int _max_queue_size = 0;
+    size_t _idle_time = 0;
+
+    unsigned int _n_existing_workers = 0;
+    unsigned int _n_free_workers = 0;
+    std::condition_variable stop_condition;
 };
 
 } // namespace Concurrency
