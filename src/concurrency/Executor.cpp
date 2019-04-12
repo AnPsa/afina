@@ -34,7 +34,6 @@ namespace Afina {
             if (await) {
                 stop_condition.wait(lock);
             }
-            state = State::kStopped;
         }
 
         void perform(Afina::Concurrency::Executor *executor) {
@@ -66,8 +65,11 @@ namespace Afina {
             std::unique_lock<std::mutex> lock(executor->mutex);
             lock.lock();
             executor->_n_existing_workers--;
-            if (executor->_n_existing_workers == 0)
+            if (executor->_n_existing_workers == 0) {
                 executor->stop_condition.notify_one();
+                executor->state = Executor::State::kStopped;
+            }
+
         }
     }
 } // namespace Afina
