@@ -19,7 +19,9 @@ bool SimpleLRU::Put(const std::string &key, const std::string &value) {
     lru_node new_node(key, value);
 
     _lru_head.push_back(std::move(new_node));
-    _lru_index[new_node.key] = std::prev(_lru_head.end());
+        auto elem_to_push = std::prev(_lru_head.end());
+        _lru_index[elem_to_push->key] = elem_to_push;
+        _free_size -= desired_size;
     return true;
 }
 
@@ -43,6 +45,8 @@ bool SimpleLRU::Set(const std::string &key, const std::string &value) {
         return false;
     }
 
+        size_t prev_size = elem_to_update->second->key.size() + elem_to_update->second->value.size();
+
     while (_free_size < desired_size) {
         if (_lru_head.begin() == elem_to_update->second)
             continue;
@@ -51,6 +55,8 @@ bool SimpleLRU::Set(const std::string &key, const std::string &value) {
 
     elem_to_update->second->value = value;
     _lru_head.splice(_lru_head.end(), _lru_head, elem_to_update->second);
+        _free_size += desired_size - prev_size;
+        return true;
 }
 
 // See MapBasedGlobalLockImpl.h
@@ -66,6 +72,7 @@ bool SimpleLRU::Delete(const std::string &key) {
 
     _lru_head.erase(elem_to_delete->second);
     _lru_index.erase(elem_to_delete);
+        return true;
 }
 
 // See MapBasedGlobalLockImpl.h

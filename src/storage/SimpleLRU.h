@@ -1,8 +1,10 @@
+#include <utility>
+
 #ifndef AFINA_STORAGE_SIMPLE_LRU_H
 #define AFINA_STORAGE_SIMPLE_LRU_H
 
 #include <list>
-#include <map>
+#include <unordered_map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -18,12 +20,7 @@ namespace Backend {
  */
 class SimpleLRU : public Afina::Storage {
 public:
-    SimpleLRU(size_t max_size = 1024) : _max_size(max_size), _free_size(_max_size) {}
-
-    ~SimpleLRU() {
-        _lru_index.clear();
-        // _lru_head.reset(); // TODO: Here is stack overflow
-    }
+    explicit SimpleLRU(size_t max_size = 1024) : _max_size(max_size), _free_size(_max_size) {}
 
     // Implements Afina::Storage interface
     bool Put(const std::string &key, const std::string &value) override;
@@ -46,7 +43,7 @@ private:
         const std::string key;
         std::string value;
 
-        lru_node(const std::string &key_i, const std::string &value_i) : key(key_i), value(value_i) {}
+        lru_node(std::string key_i, std::string value_i) : key(std::move(key_i)), value(std::move(value_i)) {}
         // std::unique_ptr<lru_node> prev;
         // std::unique_ptr<lru_node> next;
     };
@@ -65,7 +62,7 @@ private:
     // lru_node* _lru_tail;
 
     // Index of nodes from list above, allows fast random access to elements by lru_node#key
-    std::map<std::reference_wrapper<const std::string>, std::list<lru_node>::iterator, std::less<std::string>> _lru_index;
+    std::unordered_map<std::reference_wrapper<const std::string>, std::list<lru_node>::iterator, std::hash<std::string>, std::equal_to<const std::string>> _lru_index;
 };
 
 } // namespace Backend
